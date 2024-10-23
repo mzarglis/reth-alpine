@@ -1,5 +1,5 @@
 # Stage 1: Build reth
-FROM rust:1.72-alpine3.18 as builder
+FROM alpine:3.18 as builder
 
 # Install build dependencies
 RUN apk add --no-cache \
@@ -11,7 +11,12 @@ RUN apk add --no-cache \
     pkgconfig \
     openssl-dev \
     clang-dev \
-    cmake
+    cmake \
+    curl
+
+# Install latest stable Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Clone the latest version of reth
 RUN git clone https://github.com/paradigmxyz/reth.git && \
