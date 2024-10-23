@@ -1,57 +1,64 @@
-# Stage 1: Build reth
-FROM alpine:latest as builder
+FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
+WORKDIR /app
 
-# Install build dependencies
-RUN apk add --no-cache \
-    git \
-    make \
-    gcc \
-    musl-dev \
-    linux-headers \
-    pkgconfig \
-    openssl-dev \
+LABEL org.opencontainers.image.source=https://github.com/paradigmxyz/reth
+LABEL org.opencontainers.image.licenses="MIT OR Apache-2.0"
+
+# Install system dependencies
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
     clang-dev \
-    cmake \
-    curl
+    pkgconfig \
+    musl-dev \
+    gcc \
+    make \
+    libc-dev
 
-# Install latest stable Rust
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="/root/.cargo/bin:${PATH}"
+# Builds a cargo-chef plan
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
 
-# Set target for x86-64
-RUN rustup target add x86_64-unknown-linux-musl
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
 
-# Clone the latest version of reth
-RUN git clone https://github.com/paradigmxyz/reth.git && \
-    cd reth && \
-    git fetch --tags && \
-    latestTag=$(git describe --tags `git rev-list --tags --max-count=1`) && \
-    git checkout $latestTag
+# Build profile, release by default
+ARG BUILD_PROFILE=release
+ENV BUILD_PROFILE=$BUILD_PROFILE
 
-WORKDIR /reth
+# Extra Cargo flags
+ARG RUSTFLAGS=""
+ENV RUSTFLAGS="$RUSTFLAGS"
 
-# Build reth with x86-64 specific optimizations
-ENV RUSTFLAGS="-C target-cpu=x86-64 -C target-feature=+sse,+sse2,+sse3,+ssse3,+sse4.1,+sse4.2,+avx,+avx2"
-RUN cargo build --profile maxperf --target x86_64-unknown-linux-musl
+# Extra Cargo features
+ARG FEATURES=""
+ENV FEATURES=$FEATURES
 
-# Stage 2: Create the runtime image
-FROM alpine:latest
+# Builds dependencies
+RUN cargo chef cook --profile $BUILD_PROFILE --features "$FEATURES" --recipe-path recipe.json
+
+# Build application
+COPY . .
+RUN cargo build --profile $BUILD_PROFILE --features "$FEATURES" --locked --bin reth
+
+# ARG is not resolved in COPY so we have to hack around it by copying the
+# binary to a temporary location
+RUN cp /app/target/$BUILD_PROFILE/reth /app/reth
+
+# Use Alpine as the release image
+FROM alpine:latest AS runtime
+WORKDIR /app
 
 # Install runtime dependencies
 RUN apk add --no-cache \
     libgcc \
-    openssl \
     ca-certificates
 
-# Copy the built executable
-COPY --from=builder /reth/target/x86_64-unknown-linux-musl/maxperf/reth /usr/local/bin/
+# Copy reth over from the build stage
+COPY --from=builder /app/reth /usr/local/bin
 
-# Create data directory
-RUN mkdir -p /data
-VOLUME ["/data"]
+# Copy licenses
+COPY LICENSE-* ./
 
-# Expose default ports
-EXPOSE 8545 8546 30303 30303/udp
-
-ENTRYPOINT ["reth"]
-CMD ["node"]
+EXPOSE 30303 30303/udp 9001 8545 8546
+ENTRYPOINT ["/usr/local/bin/reth"]
