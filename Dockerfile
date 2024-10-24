@@ -5,14 +5,12 @@ LABEL org.opencontainers.image.source=https://github.com/paradigmxyz/reth
 LABEL org.opencontainers.image.licenses="MIT OR Apache-2.0"
 
 # Install system dependencies
-RUN apt-get update && apt-get upgrade -y && \
-    apt-get install -y \
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
     clang \
     libclang-dev \
     pkg-config \
-    gcc \
-    make \
-    libc-dev \
+    build-essential \
     linux-headers-generic
 
 # Builds a cargo-chef plan
