@@ -7,12 +7,14 @@ LABEL org.opencontainers.image.licenses="MIT OR Apache-2.0"
 # Install system dependencies
 RUN apk update && apk upgrade && \
     apk add --no-cache \
+    clang-libs \
     clang-dev \
-    pkgconfig \
+    pkgconf \
     musl-dev \
     gcc \
     make \
-    libc-dev
+    libc-dev \
+    linux-headers
 
 # Builds a cargo-chef plan
 FROM chef AS planner
