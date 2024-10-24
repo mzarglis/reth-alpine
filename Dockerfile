@@ -5,16 +5,15 @@ LABEL org.opencontainers.image.source=https://github.com/paradigmxyz/reth
 LABEL org.opencontainers.image.licenses="MIT OR Apache-2.0"
 
 # Install system dependencies
-RUN apk update && apk upgrade && \
-    apk add --no-cache \
-    clang-libs \
-    clang-dev \
-    pkgconf \
-    musl-dev \
+RUN apt-get update && apt-get upgrade -y && \
+    apt-get install -y \
+    clang \
+    libclang-dev \
+    pkg-config \
     gcc \
     make \
     libc-dev \
-    linux-headers
+    linux-headers-generic
 
 # Builds a cargo-chef plan
 FROM chef AS planner
